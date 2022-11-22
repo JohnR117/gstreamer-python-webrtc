@@ -28,7 +28,6 @@ import utils.logger as LOGGER
 from utils.config import Config, path_make
 from utils.event import Event
 from utils.gst import GLib, Gst, GstSdp, GstWebRTC
-from utils.heading_calc import calc_corrected_heading
 from utils.logger import XT, Logger, get_logger, load_package_logger
 
 
