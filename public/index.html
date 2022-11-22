@@ -1,0 +1,191 @@
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	</head>
+	<body>
+		<script defer="true">
+			const modify_sdp = (data) => {
+				const REGEX_H264 = /H264\/90000/;
+				const REGEX_level_asymmetry_allowed = /level-asymmetry-allowed=(.*);/;
+				const REGEX_profile_level_id = /profile-level-id=(.*);/;
+				if (data.sdp == undefined || !REGEX_H264.test(data.sdp)) {
+					return [data, (data) => data];
+				}
+				let sdp = data.sdp;
+				let level_asymmetry_allowed = undefined;
+				const level_asymmetry_allowed_match = data.sdp.match(REGEX_level_asymmetry_allowed);
+				if (level_asymmetry_allowed_match) {
+					level_asymmetry_allowed = level_asymmetry_allowed_match?.[1];
+					sdp = sdp.replace(REGEX_level_asymmetry_allowed, "level-asymmetry-allowed=1;");
+				}
+				let profile_level_id = undefined;
+				const profile_level_id_match = data.sdp.match(REGEX_profile_level_id);
+				if (profile_level_id_match) {
+					profile_level_id = profile_level_id_match?.[1];
+					sdp = sdp.replace(REGEX_profile_level_id, `profile-level-id=42001f;${level_asymmetry_allowed ? "" : "level-asymmetry-allowed=1;"}`);
+				}
+				const modified = {
+					type: data.type,
+					sdp,
+				};
+				return [
+					modified,
+					(data) => {
+						if (data.sdp == undefined) {
+							return data;
+						}
+						let sdp = data.sdp;
+						if (level_asymmetry_allowed) {
+							sdp = sdp.replace("level-asymmetry-allowed=1", `level-asymmetry-allowed=${level_asymmetry_allowed}`);
+						} else {
+							sdp = sdp.replace("level-asymmetry-allowed=1;?", "");
+						}
+						sdp = sdp.replace(REGEX_level_asymmetry_allowed, level_asymmetry_allowed ? `level-asymmetry-allowed=${level_asymmetry_allowed};` : "");
+						if (profile_level_id) {
+							sdp = sdp.replace("profile-level-id=42001f", `profile-level-id=${profile_level_id}`);
+						}
+						const reverted = {
+							type: data.type,
+							sdp,
+						};
+						return reverted;
+					},
+				];
+			};
+			class EventEmitter extends EventTarget {
+				emit = (type, data) => {
+					this.dispatchEvent(new CustomEvent(type, { detail: data }));
+				};
+			}
+
+			class WebRTCStream {
+				static instances = [];
+				media;
+				_video;
+				_ws;
+				pc;
+				pc_config;
+				events;
+				constructor() {
+					this.media = new MediaStream();
+					this.events = new EventEmitter();
+					WebRTCStream.instances.push(this);
+				}
+				destroy() {
+					this.ws = undefined;
+					this.video = undefined;
+					this.media = undefined;
+					if (this.pc) {
+						this.pc.close();
+						this.pc = undefined;
+					}
+					let i = WebRTCStream.instances.indexOf(this);
+					if (0 <= i && i < WebRTCStream.instances.length) WebRTCStream.instances.splice(i, 1);
+				}
+				send(data) {
+					if (this.ws) {
+						console.log("send", data);
+						this.ws.send(JSON.stringify(data));
+					}
+				}
+				connect(url) {
+					console.log(`connecting to ${url}`);
+					this.ws = new WebSocket(url);
+				}
+				onsdp = async (offer) => {
+					if (this.pc) this.pc.close();
+					this.pc = new RTCPeerConnection(this.pc_config || {});
+					this.pc.addEventListener("datachannel", (ev) => this.events.emit("datachannel", ev));
+					this.pc.addEventListener("track", ({ track }) => {
+						this.media?.addTrack(track);
+						track.addEventListener("unmute", () => this.media?.addTrack(track));
+						track.addEventListener("mute", () => this.media?.removeTrack(track));
+					});
+					this.pc.addEventListener("icecandidate", ({ candidate: data }) => {
+						this.send({ type: "ice", data }); // sending all ice, this should send null ice;
+					});
+					try {
+						const [offer_modded, revert] = modify_sdp(offer);
+						await this.pc.setRemoteDescription(offer_modded);
+						let answer = await this.pc.createAnswer();
+						await this.pc.setLocalDescription(answer);
+						const answer_modded = revert(answer);
+						this.send({ type: "sdp", data: answer_modded });
+					} catch (err) {
+						console.error({ err, offer });
+						this.events.emit("error", err);
+					}
+				};
+				onice = async (ice) => {
+					try {
+						if (this.pc) this.pc.addIceCandidate(new RTCIceCandidate(ice));
+					} catch (err) {
+						this.events.emit("error", err);
+					}
+				};
+				onmessage = (ev) => {
+                    console.log(ev);
+					try {
+						// console.log({ message: ev.data });
+						let { type, data } = JSON.parse(ev.data);
+						if (type == "sdp") this.onsdp(data);
+						else if (type == "ice") this.onice(data);
+						else throw new Error(`received unrecognized message type: ${type}`);
+					} catch (err) {
+						this.events.emit("error", err);
+					}
+				};
+				get addEventListener() {
+					return this.events.addEventListener.bind(this.events);
+				}
+				get removeEventListener() {
+					return this.events.removeEventListener.bind(this.events);
+				}
+				get on() {
+					return this.events.on.bind(this.events);
+				}
+				get once() {
+					return this.events.once.bind(this.events);
+				}
+				get off() {
+					return this.events.off.bind(this.events);
+				}
+				get video() {
+					return this._video;
+				}
+				set video(video) {
+					if (this._video) {
+						this._video.srcObject = undefined;
+					}
+					this._video = video;
+					if (this._video) {
+						this._video.srcObject = this.media;
+					}
+				}
+				get ws() {
+					return this._ws;
+				}
+				set ws(ws) {
+					if (this._ws) {
+						this._ws.close();
+						this._ws = undefined;
+					}
+					this._ws = ws;
+					if (this._ws) {
+						this._ws.addEventListener("message", this.onmessage);
+					}
+				}
+			}
+		</script>
+		<video id="video" controls crossorigin></video>
+		<script defer>
+			const webrtc = new WebRTCStream();
+			webrtc.video = document.getElementById("video");
+            webrtc.video.muted = true;
+			webrtc.connect(`ws://${window.location.host}/ws`);
+            webrtc.video.play();
+		</script>
+	</body>
+</html>
