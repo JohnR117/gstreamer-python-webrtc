@@ -18,6 +18,7 @@ from random import sample
 import cv2
 import numpy as np
 import sanic.response as response
+import sanic.request as request
 from google.protobuf.json_format import MessageToDict, MessageToJson
 from sanic import Sanic
 from sanic.server.websockets.impl import WebsocketImplProtocol
@@ -343,7 +344,7 @@ class Branch:
                 pipeline: "Gst.Bin" = self.target.parent
                 if pipeline and self.bin:
                     pipeline.remove(self.bin)
-            self.bin.set_state(Gst.State.NULL)
+            # self.bin.set_state(Gst.State.NULL)
         self.bin = None
         self.target = None
 
@@ -655,6 +656,7 @@ class CameraToWebRTC:
         self._camera: "Camera" = None
         self.__viewers: "list[Viewer]" = []
         self.running_number = 0
+        self.logger = get_logger()
 
     @property
     def camera(self):
@@ -664,9 +666,14 @@ class CameraToWebRTC:
     def camera(self, camera: "Camera"):
         # if self._camera != None:
         #     self._camera.webrtc_appsink -= self.on_webrtc_appsink
+        current_viewers = list(self.__viewers)
+        for viewer in current_viewers:
+            self.remove(viewer)
         self._camera = camera
         if self._camera != None:
             self.logger = self._camera.logger
+        for viewer in current_viewers:
+            self.add(viewer)
         #     self._camera.webrtc_appsink += self.on_webrtc_appsink
 
     def remove(self, viewer: Viewer):
@@ -681,17 +688,20 @@ class CameraToWebRTC:
     def add(self, viewer: Viewer):
         self.remove(viewer)
         self.__viewers.append(viewer)
-        branch = Branch()
-        branch.logger = viewer.logger.sub("video")
-        branch.appsink = self.camera.webrtc_appsink
-        viewer.add_branch(branch)
-        # datachannel = DataChannelProtobuf()
-        # datachannel.logger = viewer.logger.sub("axon")
-        # datachannel.name = "axon"
-        # datachannel.as_text = True
-        # datachannel.event = self.on_browser_message
-        # viewer.add_datachannel(datachannel)
-        viewer.start()
+        try:
+            branch = Branch()
+            branch.logger = viewer.logger.sub("video")
+            branch.appsink = self.camera.webrtc_appsink
+            viewer.add_branch(branch)
+            # datachannel = DataChannelProtobuf()
+            # datachannel.logger = viewer.logger.sub("axon")
+            # datachannel.name = "axon"
+            # datachannel.as_text = True
+            # datachannel.event = self.on_browser_message
+            # viewer.add_datachannel(datachannel)
+            viewer.start()
+        except BaseException as ex:
+            self.logger.exception(ex)
         
     async def handle(self, request, websocket: WebsocketImplProtocol):
         viewer = Viewer()
@@ -751,13 +761,9 @@ class Camera:
 
     def clear(self):
         self.stop()
-
         self.restart.clear()
         self.webrtc_appsink.clear()
         self.pipeline.clear()
-
-        for viewer in self.__viewers:
-            self.remove(viewer)
 
     def stop(self):
         self.restart.stop()
@@ -770,7 +776,7 @@ class Camera:
         pipe = "v4l2src device=/dev/video0 ! "
         pipe += "capsfilter caps=\"image/jpeg, width=1280, height=720\" ! "
         pipe += "jpegdec ! "
-        pipe += "videoconvert ! capsfilter caps=\"video/x-raw, format=I420\" ! "
+        pipe += "capsfilter caps=\"video/x-raw, format=I420\" ! "
         pipe += "x264enc tune=zerolatency key-int-max=30 ! "
         pipe += "h264parse config-interval=-1 ! "
         pipe += "rtph264pay config-interval=-1 pt=96 ! "
@@ -779,8 +785,6 @@ class Camera:
         self.pipeline.parse_launch(pipe)
         self.webrtc_appsink.start(self.pipeline.pipeline.get_by_name("webrtc_appsink"))
         self.pipeline.play()
-        # for viewer in tuple(self.__viewers):
-        #     self.add(viewer)
 
     def on_error(self, err, debug):
         self.restart.start(5000)
@@ -807,12 +811,23 @@ def main():
     app.static("/", f"{Path()/ 'public'}", name="static")
     app.static("/", f"{Path()/ 'public' / 'index.html'}", name="index")
 
-    camera = Camera()
-    camera.start()
     camera_to_webrtc = CameraToWebRTC()
-    camera_to_webrtc.camera = camera
-    app.add_websocket_route(camera_to_webrtc.handle, "/ws")
+    
+    def switch_camera():
+        if camera_to_webrtc.camera != None:
+            camera_to_webrtc.camera.clear()
+        camera = Camera()
+        camera.start()
+        camera_to_webrtc.camera = camera
 
+    @app.route("/a", methods=["GET", "POST"])
+    def api_a(request: "request.Request"):
+        switch_camera()
+        return response.json({})
+        
+    switch_camera()
+    app.add_websocket_route(camera_to_webrtc.handle, "/ws")
+        
     try:
         port = int(os.environ.get("PORT", 8080))
         app.run("0.0.0.0", port=port, single_process=True)
