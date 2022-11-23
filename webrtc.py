@@ -375,62 +375,6 @@ class Branch:
         self.bin.sync_state_with_parent()
         # self.appsrc.appsink = self.appsink
 
-# class DataChannelAppSink:
-#     def __init__(self) -> None:
-#         self._appsink: "gstapp.AppSink" = None
-#         self._webrtcbin: "WebRTCBin" = None
-#         self._datachannel: "GstWebRTC.WebRTCDataChannel" = None
-#         self.datachannel_options: "Gst.Structure" = None
-#         self.as_text = False
-#         self.name: "str" = None
-
-#     @property
-#     def webrtcbin(self):
-#         return self._webrtcbin
-
-#     @webrtcbin.setter
-#     def webrtcbin(self, webrtcbin: "WebRTCBin"):
-#         self.__appsink_stop()
-#         if self._datachannel:
-#             self._datachannel.close()
-#         self._webrtcbin = webrtcbin
-#         self.__appsink_start()
-
-#     @property
-#     def appsink(self):
-#         return self._appsink
-
-#    def __appsink_stop(self):
-#        if self._appsink:
-#            self._appsink.on_pulled_sample -= self.on_pulled_sample
-#        self._appsink = None
-
-#     def __appsink_start(self):
-#         if self._appsink:
-#             self._appsink.on_pulled_sample += self.on_pulled_sample
-
-#     @appsink.setter
-#     def appsink(self, appsink: "gstapp.AppSink"):
-#         self.__appsink_stop()
-#         self._appsink = appsink
-#         self.__appsink_start()
-
-#     @property
-#     def datachannel(self):
-#         if self._datachannel != None:
-#             return self._datachannel
-#         self._datachannel = self._webrtcbin.create_datachannel(self.name, self.datachannel_options)
-#         return self._datachannel
-
-#     def on_pulled_sample(self, _sample: "Gst.Sample"):
-#         sample = gstapp.Sample(_sample)
-#         sample.read()
-#         if self.as_text:
-#             self.datachannel.send_string(sample.as_string())
-#         else:
-#             self.datachannel.send_data(sample.as_bytes())
-#         return Gst.FlowReturn.OK
-
 
 def get_sdp_type(data: typing.Any):
     if type(data) == str:
@@ -773,13 +717,16 @@ class Camera:
     def start(self):
         self.stop()
 
-        pipe = "v4l2src device=/dev/video0 ! "
-        pipe += "capsfilter caps=\"image/jpeg, width=1280, height=720\" ! "
-        pipe += "jpegdec ! "
-        pipe += "capsfilter caps=\"video/x-raw, format=I420\" ! "
-        pipe += "x264enc tune=zerolatency key-int-max=30 ! "
-        pipe += "h264parse config-interval=-1 ! "
-        pipe += "rtph264pay config-interval=-1 pt=96 ! "
+        pipe = f"rtspsrc location={self.uri} ! rtph264depay ! "
+        pipe += "h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width=854, height=480\" ! vp8enc !"
+        # pipe += " x264enc tune=zerolatency key-int-max=30 ! h264parse config-interval=-1 ! "
+        # pipe += "capsfilter caps=\"image/jpeg, width=1280, height=720\" ! "
+        # pipe += "jpegdec ! "
+        # pipe += "videoconvert ! capsfilter caps=\"video/x-raw, format=I420\" ! "
+        # pipe += "x264enc tune=zerolatency key-int-max=30 ! "
+        # pipe += "h264parse config-interval=-1 ! "
+        pipe += " rtpvp8pay ! "
+        # pipe += "rtph264pay config-interval=-1 pt=96 ! "
         pipe += gstapp.Pipe.appsink("webrtc_appsink")
 
         self.pipeline.parse_launch(pipe)
@@ -794,6 +741,7 @@ class Camera:
 
 
 def main():
+    global rtsp
     # logger = load_package_logger(level=LOGGER.BIN)
     logger = load_package_logger(level=logging.DEBUG)
 
@@ -813,21 +761,25 @@ def main():
 
     camera_to_webrtc = CameraToWebRTC()
     
-    def switch_camera():
+    def switch_camera(rtsp):
         if camera_to_webrtc.camera != None:
             camera_to_webrtc.camera.clear()
         camera = Camera()
+        camera.uri = rtsp
         camera.start()
         camera_to_webrtc.camera = camera
 
-    @app.route("/a", methods=["GET", "POST"])
-    def api_a(request: "request.Request"):
-        switch_camera()
+    @app.route("/rtsp", methods=["GET", "POST"])
+    def api_rtsp(request: "request.Request"):
+        rtsp = request.json["rtsp"]
+        print("rtsp:",rtsp)    
+        switch_camera(rtsp)
+
         return response.json({})
         
-    switch_camera()
+    # switch_camera(rtsp)
     app.add_websocket_route(camera_to_webrtc.handle, "/ws")
-        
+    
     try:
         port = int(os.environ.get("PORT", 8080))
         app.run("0.0.0.0", port=port, single_process=True)
