@@ -685,6 +685,9 @@ class Camera:
         self.webrtc_appsink.enable_auto_pull_ring(60)
 
         self.uri: "str" = None
+        self.uri2: "str" = None
+        self.uri3: "str" = None
+        self.uri4: "str" = None
 
         self._logger: "Logger" = None
         self.logger = get_logger()
@@ -716,9 +719,29 @@ class Camera:
 
     def start(self):
         self.stop()
+        width = 800
+        height = 600
+        pipe = ""
+        pipe += f"filesrc location={self.uri} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_0 "
+        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_1 "
+        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_2 "
+        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_3 "
 
-        pipe = f"rtspsrc location={self.uri} ! rtph264depay ! "
-        pipe += "h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width=854, height=480\" ! vp8enc !"
+        pipe += f"filesrc location={self.uri3} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_4 "
+        pipe += f"filesrc location={self.uri4} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_5 "
+        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_6 "
+        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_7 "
+
+        pipe += "compositor name=compositor "
+        pipe += f"sink_0::xpos={0 * width} sink_0::ypos={0 * height} "
+        pipe += f"sink_1::xpos={1 * width} sink_1::ypos={0 * height} "
+        pipe += f"sink_2::xpos={2 * width} sink_2::ypos={0 * height} "
+        pipe += f"sink_3::xpos={3 * width} sink_3::ypos={0 * height} "
+        pipe += f"sink_4::xpos={0 * width} sink_4::ypos={1 * height} "
+        pipe += f"sink_5::xpos={1 * width} sink_5::ypos={1 * height} "
+        pipe += f"sink_6::xpos={2 * width} sink_6::ypos={1 * height} "
+        pipe += f"sink_7::xpos={3 * width} sink_7::ypos={1 * height} ! "
+        pipe += "vp8enc ! "
         # pipe += " x264enc tune=zerolatency key-int-max=30 ! h264parse config-interval=-1 ! "
         # pipe += "capsfilter caps=\"image/jpeg, width=1280, height=720\" ! "
         # pipe += "jpegdec ! "
@@ -741,7 +764,6 @@ class Camera:
 
 
 def main():
-    global rtsp
     # logger = load_package_logger(level=LOGGER.BIN)
     logger = load_package_logger(level=logging.DEBUG)
 
@@ -761,23 +783,31 @@ def main():
 
     camera_to_webrtc = CameraToWebRTC()
     
-    def switch_camera(rtsp):
+    def switch_camera(file1, file2,file3, file4):
         if camera_to_webrtc.camera != None:
             camera_to_webrtc.camera.clear()
         camera = Camera()
-        camera.uri = rtsp
+        camera.uri = file1
+        camera.uri2 = file2
+        camera.uri3 = file3
+        camera.uri4 = file4
+
         camera.start()
         camera_to_webrtc.camera = camera
 
     @app.route("/rtsp", methods=["GET", "POST"])
     def api_rtsp(request: "request.Request"):
-        rtsp = request.json["rtsp"]
-        print("rtsp:",rtsp)    
-        switch_camera(rtsp)
+        file1 = request.json["file1"]
+        file2 = request.json["file2"]
+        file3 = request.json["file3"]
+        file4 = request.json["file4"]
+
+        print("file1:",file1) 
+        print("file2:",file2)       
+        switch_camera(file1, file2, file3, file4)
 
         return response.json({})
         
-    # switch_camera(rtsp)
     app.add_websocket_route(camera_to_webrtc.handle, "/ws")
     
     try:
