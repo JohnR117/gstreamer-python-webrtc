@@ -40,33 +40,33 @@ from pathlib import Path
 
 list = []
 
-files = glob('images/*')
+files = glob('photos/*')
 for file in files:
-    list.append(file.replace('images/',''))
-list.sort(key=lambda x : int((x.replace("image",'').split('.')[0])))
+    list.append(file.replace('photos/',''))
+list.sort(key=lambda x : int((x.replace("frame",'').split('.')[0])))
 
 
-frameSize = (960, 540)
-i = 0
+frameSize = (1920, 1080)
+b = 0
 
 
-
+# print(list)
 for i in list:
-    image = cv2.imread(f"images/{i}")
+    image = cv2.imread(f"photos/{i}")
     (h, w) = image.shape[:2]
     (cX, cY) = (w // 2, h // 2)
-
+    b += 1
     topLeft = image[0:cY, 0:cX]
     topRight = image[0:cY, cX:w]
     bottomLeft = image[cY:h, 0:cX]
     bottomRight = image[cY:h, cX:w]
 
 
-    cv2.imwrite(f"top_left/{i}topLeft.jpg",topLeft)
-    cv2.imwrite(f"top_right/{i}topRight.jpg",topRight)
-    cv2.imwrite(f"bottom_left/{i}bottomLeft.jpg",bottomLeft)
-    cv2.imwrite(f"bottom_right/{i}bottomRight.jpg",bottomRight)
-    cv2.waitKey(0)
+    cv2.imwrite(f"top_left/topLeft{b}.png",topLeft)
+    cv2.imwrite(f"top_right/topRight{b}.png",topRight)
+    cv2.imwrite(f"bottom_left/bottomLeft{b}.png",bottomLeft)
+    cv2.imwrite(f"bottom_right/bottomRight{b}.png",bottomRight)
+cv2.waitKey(0)
 
 
 
