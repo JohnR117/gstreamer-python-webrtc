@@ -4,7 +4,7 @@ gst-launch-1.0 v4l2src device="/dev/video0" ! 'image/jpeg, width=1280, height=72
 
 # Record for 10 seconds  :
 
-gst-launch-1.0 -ev videotestsrc pattern=snow num-buffers=300 ! video/x-raw,width=640,height=480,framerate=30/1 ! nvvidconv ! 'video/x-raw(memory:NVMM),width=3840,height=2160,format=NV12' ! nvv4l2av1enc enable-headers=1 bitrate=1000000 ! filesink location=test.ivf
+gst-launch-1.0 -ev videotestsrc pattern=snow num-buffers=300 ! video/x-raw,width=640,height=480,framerate=30/1 ! nvvidconv ! 'video/x-raw(memory:NVMM),width=3840,height=2160,format=NV12' ! nvv4l2av1enc enable-headers=1 bitrate=1000000 ! filesink loca4rtion=test.ivf
 
 
 
@@ -61,11 +61,10 @@ gst-launch-1.0 \
   
 
   
-  
+
 
 
  ## change :
-
 
 gst-launch-1.0 \
   compositor name=comp \
@@ -78,9 +77,52 @@ gst-launch-1.0 \
   imagesequencesrc location=top_right/topRight%d.png start-index=1 stop-index=50000 framerate=30/1 ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=640, height=420\" ! queue2 ! comp.sink_1 \
   imagesequencesrc location=bottom_left/bottomLeft%d.png start-index=1 stop-index=50000 framerate=30/1 ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=640, height=420\" ! queue2 ! comp.sink_2 \
   imagesequencesrc location=bottom_right/bottomRight%d.png start-index=1 stop-index=50000 framerate=30/1 ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=640, height=420\" ! queue2 ! comp.sink_3
+
+
+
+
+
+
+
+multifilesrc location="frame%05d.png" caps="image/png,framerate=30/1" 
+
+
+gst-launch-1.0 \
+  compositor name=comp \
+    sink_0::alpha=1 sink_0::xpos=0 sink_0::ypos=0 \
+    sink_1::alpha=1 sink_1::xpos=0 sink_1::ypos=0 \
+    sink_2::alpha=1 sink_2::xpos=0 sink_2::ypos=0 \
+    sink_3::alpha=1 sink_3::xpos=0 sink_3::ypos=0 \
+    sink_4::alpha=1 sink_4::xpos=0 sink_4::ypos=0 \
+    sink_5::alpha=1 sink_5::xpos=0 sink_5::ypos=0 \
+    sink_6::alpha=1 sink_6::xpos=0 sink_6::ypos=0 \
+    sink_7::alpha=1 sink_7::xpos=0 sink_7::ypos=0 ! \
+      videoconvert ! autovideosink \
+  multifilesrc location=\"outputs/00/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_0 \
+  multifilesrc location=\"outputs/01/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_1 \
+  multifilesrc location=\"outputs/02/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_2 \
+  multifilesrc location=\"outputs/03/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_3 \
+  multifilesrc location=\"outputs/10/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_4 \
+  multifilesrc location=\"outputs/11/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_5 \
+  multifilesrc location=\"outputs/12/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_6 \
+  multifilesrc location=\"outputs/13/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=480, height=540\" ! queue2 ! comp.sink_7
   
   
   
   
   
+  
+  
+  rtpjpegpay
+  jpegparse
+
+
+
+
+
+
+
+
+
+
 

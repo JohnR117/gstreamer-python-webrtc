@@ -15,7 +15,6 @@ from io import TextIOWrapper
 from pathlib import Path
 from random import sample
 
-import cv2
 import numpy as np
 import sanic.response as response
 import sanic.request as request
@@ -360,6 +359,7 @@ class Branch:
         pipe = ""
         pipe += gstapp.Pipe.appsrc("appsrc")
         # pipe += " ! "
+        # pipe += "identity dump=true"
         # pipe += "queue max-size-buffers=1 leaky=downstream ! "
 
         # pipe += "h264parse config-interval=-1 ! "
@@ -719,37 +719,70 @@ class Camera:
 
     def start(self):
         self.stop()
-        width = 800
-        height = 600
+        width = 480
+        height = 540
         pipe = ""
-        pipe += f"filesrc location={self.uri} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_0 "
-        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_1 "
-        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_2 "
-        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_3 "
+        pipe += f"v4l2src device=\"/dev/video0\" ! capsfilter caps=\"image/jpeg, width=640, height=480\" ! jpegdec ! videoscale method=0 add-borders=false ! capsfilter caps=\"video/x-raw, width=660, height=530, pixel-aspect-ratio=1/1\" ! videoconvert ! compositor.sink_0 "
+        pipe += f"v4l2src device=\"/dev/video2\" ! capsfilter caps=\"image/jpeg, width=640, height=480\" ! jpegdec ! videoscale method=0 add-borders=false ! capsfilter caps=\"video/x-raw, width=660, height=530, pixel-aspect-ratio=1/1\" ! videoconvert ! compositor.sink_1 "
+        pipe += f"multifilesrc location=\"outputs/02/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_2 "
+        pipe += f"multifilesrc location=\"outputs/03/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_3 "
+        pipe += f"multifilesrc location=\"outputs/10/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_4 "
+        pipe += f"multifilesrc location=\"outputs/11/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_5 "
+        pipe += f"multifilesrc location=\"outputs/12/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_6 "
+        pipe += f"multifilesrc location=\"outputs/13/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_7 "
 
-        pipe += f"filesrc location={self.uri3} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_4 "
-        pipe += f"filesrc location={self.uri4} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_5 "
-        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_6 "
-        pipe += f"filesrc location={self.uri2} ! qtdemux ! h264parse ! avdec_h264 ! videoscale ! capsfilter caps=\"video/x-raw, width={width}, height={height}\" ! compositor.sink_7 "
-
+        #pipe += "compositor name=compositor "
+        #pipe += f"sink_0::xpos=0 sink_0::ypos=0 "
+        #pipe += f"sink_1::xpos=426 sink_1::ypos=0 "
+        #pipe += f"sink_2::xpos=0 sink_2::ypos=240 "
+        #pipe += f"sink_3::xpos=426 sink_3::ypos=240 ! "
+        
         pipe += "compositor name=compositor "
-        pipe += f"sink_0::xpos={0 * width} sink_0::ypos={0 * height} "
-        pipe += f"sink_1::xpos={1 * width} sink_1::ypos={0 * height} "
-        pipe += f"sink_2::xpos={2 * width} sink_2::ypos={0 * height} "
-        pipe += f"sink_3::xpos={3 * width} sink_3::ypos={0 * height} "
-        pipe += f"sink_4::xpos={0 * width} sink_4::ypos={1 * height} "
-        pipe += f"sink_5::xpos={1 * width} sink_5::ypos={1 * height} "
-        pipe += f"sink_6::xpos={2 * width} sink_6::ypos={1 * height} "
-        pipe += f"sink_7::xpos={3 * width} sink_7::ypos={1 * height} ! "
-        pipe += "vp8enc ! "
-        # pipe += " x264enc tune=zerolatency key-int-max=30 ! h264parse config-interval=-1 ! "
-        # pipe += "capsfilter caps=\"image/jpeg, width=1280, height=720\" ! "
-        # pipe += "jpegdec ! "
-        # pipe += "videoconvert ! capsfilter caps=\"video/x-raw, format=I420\" ! "
-        # pipe += "x264enc tune=zerolatency key-int-max=30 ! "
-        # pipe += "h264parse config-interval=-1 ! "
-        pipe += " rtpvp8pay ! "
-        # pipe += "rtph264pay config-interval=-1 pt=96 ! "
+        pipe += f" sink_0::xpos={0 * width} sink_0::ypos={0 * height}"
+        pipe += f" sink_1::xpos={1 * width} sink_1::ypos={0 * height}"
+        pipe += f" sink_2::xpos={2 * width} sink_2::ypos={0 * height}"
+        pipe += f" sink_3::xpos={3 * width} sink_3::ypos={0 * height}"
+        pipe += f" sink_4::xpos={0 * width} sink_4::ypos={1 * height}"
+        pipe += f" sink_5::xpos={1 * width} sink_5::ypos={1 * height}"
+        pipe += f" sink_6::xpos={2 * width} sink_6::ypos={1 * height}"
+        pipe += f" sink_7::xpos={3 * width} sink_7::ypos={1 * height}"
+        pipe += " ! "
+
+        # pipe += "vp8enc ! "
+        # pipe += " rtpvp8pay ! "
+        
+
+        #### Run with H264
+
+        # pipe += "videoconvert ! capsfilter caps=\"video/x-raw, width=640, height=480, format=(string)YUY2\" ! "
+        pipe += "capsfilter caps=\"video/x-raw, format=I420\" ! "
+        pipe += "videoscale ! capsfilter caps=\"video/x-raw, width=1920, height=1080\" ! "
+
+        pipe += "x264enc tune=zerolatency key-int-max=30 ! "
+        pipe += "h264parse config-interval=-1 ! "
+        pipe += "rtph264pay config-interval=-1 pt=96 ! "
+
+
+        #pipe += "nvvideoconvert ! "
+        #pipe += "nvv4l2av1enc"
+        #pipe += " enable-headers=false"
+        #pipe += " preset-level=UltraFastPreset"
+        ##pipe += " preset-level=MediumPreset"
+        #pipe += " bitrate=4000000"
+        ##pipe += " maxperf-enable=true"
+        #pipe += " disable-cdf=false"
+        ##pipe += " idrinterval=30"
+        #pipe += " iframeinterval=30"
+        ##pipe += " min-force-key-unit-interval=30000000"
+        #pipe += " ! "
+
+
+        #### Run with AV1
+
+        # pipe += "rav1enc low-latency=true error-resilient=true max-key-frame-interval=30 speed-preset=10  ! "
+        # pipe += "av1parse ! "
+        # pipe += "rtpav1pay pt=96 ! "
+        # pipe += "identity dump=true ! "
         pipe += gstapp.Pipe.appsink("webrtc_appsink")
 
         self.pipeline.parse_launch(pipe)
@@ -782,7 +815,7 @@ def main():
     app.static("/", f"{Path()/ 'public' / 'index.html'}", name="index")
 
     camera_to_webrtc = CameraToWebRTC()
-    
+
     def switch_camera(file1, file2,file3, file4):
         if camera_to_webrtc.camera != None:
             camera_to_webrtc.camera.clear()
@@ -794,6 +827,8 @@ def main():
 
         camera.start()
         camera_to_webrtc.camera = camera
+
+    switch_camera(None, None, None, None)
 
     @app.route("/rtsp", methods=["GET", "POST"])
     def api_rtsp(request: "request.Request"):
@@ -807,9 +842,9 @@ def main():
         switch_camera(file1, file2, file3, file4)
 
         return response.json({})
-        
+
     app.add_websocket_route(camera_to_webrtc.handle, "/ws")
-    
+
     try:
         port = int(os.environ.get("PORT", 8080))
         app.run("0.0.0.0", port=port, single_process=True)
