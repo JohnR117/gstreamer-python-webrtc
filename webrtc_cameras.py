@@ -678,12 +678,12 @@ class Camera:
     def start(self):
         self.stop()
         width = 800
-        height = 800
+        height = 600
 
         a = os.path.exists("/dev/video0") 
         b = os.path.exists("/dev/video2")
         c = os.path.exists("/dev/video4") 
-  
+        d = os.path.exists("/dev/video6") 
         pipe = ""
 
         if a:
@@ -692,7 +692,8 @@ class Camera:
             pipe += f"v4l2src device=\"/dev/video2\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_1 "
         if c:
             pipe += f"v4l2src device=\"/dev/video4\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_2 "
-
+        if d:
+            pipe += f"v4l2src device=\"/dev/video6\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_3 "
 
         pipe += "compositor name=compositor "
         if a:
@@ -700,9 +701,10 @@ class Camera:
         if b:
             pipe += f" sink_1::xpos={1 * width} sink_1::ypos={0 * height}"
         if c:
-            pipe += f" sink_2::xpos={2 * width} sink_2::ypos={0 * height}"
+            pipe += f" sink_2::xpos={1 * width} sink_2::ypos={1 * height}"
+        if d:
         # pipe += f" sink_3::xpos={3 * width} sink_3::ypos={0 * height}"
-        # pipe += f" sink_4::xpos={0 * width} sink_4::ypos={1 * height}"
+            pipe += f" sink_3::xpos={0 * width} sink_3::ypos={1 * height}"
         # pipe += f" sink_5::xpos={1 * width} sink_5::ypos={1 * height}"
         # pipe += f" sink_6::xpos={2 * width} sink_6::ypos={1 * height}"
         # pipe += f" sink_7::xpos={3 * width} sink_7::ypos={1 * height}"
