@@ -14,6 +14,7 @@ from datetime import datetime
 from io import TextIOWrapper
 from pathlib import Path
 from random import sample
+import os.path
 
 import numpy as np
 import sanic.response as response
@@ -89,14 +90,6 @@ class WebRTCBin:
                 self.webrtcbin.disconnect(self.__on_negotiation_needed_handler_id)
             if self.__on_ice_candidate_handler_id != None:
                 self.webrtcbin.disconnect(self.__on_ice_candidate_handler_id)
-            # ice_agent = self.webrtcbin.get_property("ice-agent")
-            # self.logger.info(f"ice_agent = {ice_agent}")
-            # self.logger.warning(f"{dir(ice_agent)}")
-
-            # sctp_transport = self.webrtcbin.get_property("sctp-transport")
-            # self.logger.info(f"sctp_transport = {sctp_transport}")
-            # self.logger.warning(f"{dir(sctp_transport)}")
-            # sctp_transport = None
 
         self.__on_negotiation_needed_handler_id = None
         self.__on_ice_candidate_handler_id = None
@@ -153,14 +146,12 @@ class WebRTCBin:
 
     def create_datachannel(self, name: "str", options: "Gst.Structure" = None) -> GstWebRTC.WebRTCDataChannel:
         datachannel: GstWebRTC.WebRTCDataChannel = self.webrtcbin.emit("create-data-channel", name, options)
-        # logger.debug(f"create_datachannel {datachannel}")
         return datachannel
 
 
 class DataChannel:
     def __init__(self):
-        # self._webrtcbin: "WebRTCBin" = None
-        # self._datachannel: "GstWebRTC.WebRTCDataChannel" = None
+
         self.datachannel: "GstWebRTC.WebRTCDataChannel" = None
         self.as_text = False
         self.name: "str" = None
@@ -169,7 +160,6 @@ class DataChannel:
 
     def __del__(self):
         self.clear()
-        # self.logger.warning("del DataChannel", stacklevel=2)
 
     def clear(self):
         self.datachannel = None
@@ -185,7 +175,6 @@ class DataChannelProtobuf(DataChannel):
         self._event: "Event[typing.Callable[[PROTO],]]" = None
 
     def __del__(self):
-        # self.logger.warning("del DataChannelProtobuf", stacklevel=2)
         super().__del__()
 
     def clear(self):
@@ -211,8 +200,6 @@ class DataChannelProtobuf(DataChannel):
             return
         ready_state: "GstWebRTC.WebRTCDataChannelState" = datachannel.get_property("ready-state")
         if ready_state != GstWebRTC.WebRTCDataChannelState.OPEN:
-            # if ready_state == GstWebRTC.WebRTCDataChannelState.CLOSED:
-            #     self._datachannel = None
             return
         if self.as_text:
             datachannel.send_string(MessageToJson(proto))
@@ -278,8 +265,7 @@ class DataChannelAppSink(DataChannel):
         datachannel = self.datachannel
         ready_state: "GstWebRTC.WebRTCDataChannelState" = datachannel.get_property("ready-state")
         if ready_state != GstWebRTC.WebRTCDataChannelState.OPEN:
-            # if ready_state == GstWebRTC.WebRTCDataChannelState.CLOSED:
-            #     self._datachannel = None
+
             return Gst.FlowReturn.OK
         if self.as_text:
             datachannel.send_string(sample.as_string())
@@ -296,7 +282,6 @@ class Branch:
         self._appsink: "gstapp.AppSink" = None
         self.target: "Gst.Element" = None
 
-        # self._last_dts = 0
         self.logger = get_logger()
 
     @property
@@ -314,19 +299,16 @@ class Branch:
     def on_pulled_sample(self, _sample: "Gst.Sample"):
         _buffer: "Gst.Buffer" = _sample.get_buffer()
         buffer: "Gst.Buffer" = _buffer.copy()
-        # buffer: "Gst.Buffer" = _buffer.copy_deep()
         buffer.dts = 0
         buffer.pts = 0
         sample = Gst.Sample.new(buffer, _sample.get_caps(), _sample.get_segment(), _sample.get_info())
 
-        # sample = _sample
 
         if self.appsrc:
             self.appsrc.push_sample(sample)
 
     def __del__(self):
         self.clear()
-        # self.logger.warning("del Branch", stacklevel=2)
 
     def clear(self):
         self.stop()
@@ -343,37 +325,21 @@ class Branch:
                 pipeline: "Gst.Bin" = self.target.parent
                 if pipeline and self.bin:
                     pipeline.remove(self.bin)
-            # self.bin.set_state(Gst.State.NULL)
         self.bin = None
         self.target = None
-
-    # def h264parse_restamp_probe(self, pad: "Gst.Pad", info: "Gst.PadProbeInfo", user_data=None):
-    #     buffer: "Gst.Buffer" = info.get_buffer()
-    #     buffer.dts = 0
-    #     buffer.pts = 0
-    #     # self.logger.info(f"{buffer.dts}, {buffer.pts}")
-    #     return Gst.PadProbeReturn.OK
 
     def start(self, target: "Gst.Element"):
         self.stop()
         pipe = ""
         pipe += gstapp.Pipe.appsrc("appsrc")
-        # pipe += " ! "
-        # pipe += "identity dump=true"
-        # pipe += "queue max-size-buffers=1 leaky=downstream ! "
-
-        # pipe += "h264parse config-interval=-1 ! "
-        # pipe += "rtph264pay name=pay0 config-interval=-1"
 
         self.logger.bin(pipe)
         self.bin: "Gst.Bin" = Gst.parse_bin_from_description(pipe, True)
-        # self.bin.get_by_name("pay0").get_static_pad("sink").add_probe(Gst.PadProbeType.BUFFER, self.h264parse_restamp_probe)
         self.appsrc = gstapp.AppSrc(self.bin.get_by_name("appsrc"))
         pipeline: "Gst.Bin" = target.parent
         pipeline.add(self.bin)
         self.bin.link(target)
         self.bin.sync_state_with_parent()
-        # self.appsrc.appsink = self.appsink
 
 
 def get_sdp_type(data: typing.Any):
@@ -592,7 +558,6 @@ class Viewer:
         self.pipeline.parse_launch("videotestsrc ! video/x-raw, format=I420 ! x264enc tune=zerolatency ! rtph264pay config-interval=-1 ! webrtcbin name=webrtcbin latency=0")
         self.webrtcbin.start(self.pipeline.pipeline.get_by_name("webrtcbin"))
         self.pipeline.play()
-        # self.webrtcbin.on_negotiation_needed()
 
 
 class CameraToWebRTC:
@@ -608,8 +573,7 @@ class CameraToWebRTC:
 
     @camera.setter
     def camera(self, camera: "Camera"):
-        # if self._camera != None:
-        #     self._camera.webrtc_appsink -= self.on_webrtc_appsink
+
         current_viewers = list(self.__viewers)
         for viewer in current_viewers:
             self.remove(viewer)
@@ -618,7 +582,6 @@ class CameraToWebRTC:
             self.logger = self._camera.logger
         for viewer in current_viewers:
             self.add(viewer)
-        #     self._camera.webrtc_appsink += self.on_webrtc_appsink
 
     def remove(self, viewer: Viewer):
         try:
@@ -637,12 +600,7 @@ class CameraToWebRTC:
             branch.logger = viewer.logger.sub("video")
             branch.appsink = self.camera.webrtc_appsink
             viewer.add_branch(branch)
-            # datachannel = DataChannelProtobuf()
-            # datachannel.logger = viewer.logger.sub("axon")
-            # datachannel.name = "axon"
-            # datachannel.as_text = True
-            # datachannel.event = self.on_browser_message
-            # viewer.add_datachannel(datachannel)
+
             viewer.start()
         except BaseException as ex:
             self.logger.exception(ex)
@@ -719,23 +677,30 @@ class Camera:
 
     def start(self):
         self.stop()
-        width = 750
+        width = 800
         height = 800
+
+        a = os.path.exists("/dev/video0") 
+        b = os.path.exists("/dev/video2")
+        c = os.path.exists("/dev/video4") 
+  
         pipe = ""
-        pipe += f"v4l2src device=\"/dev/video0\" ! capsfilter caps=\"image/jpeg, width=640, height=480\" ! jpegdec ! videoscale method=0 add-borders=false ! capsfilter caps=\"video/x-raw, width=850, height=750, pixel-aspect-ratio=1/1\" ! videoconvert ! compositor.sink_0 "
-        pipe += f"v4l2src device=\"/dev/video2\" ! capsfilter caps=\"image/jpeg, width=640, height=480\" ! jpegdec ! videoscale method=0 add-borders=false ! capsfilter caps=\"video/x-raw, width=850, height=750, pixel-aspect-ratio=1/1\" ! videoconvert ! compositor.sink_1 "
-        pipe += f"v4l2src device=\"/dev/video6\" ! capsfilter caps=\"image/jpeg, width=640, height=480\" ! jpegdec ! videoscale method=0 add-borders=false ! capsfilter caps=\"video/x-raw, width=850, height=750, pixel-aspect-ratio=1/1\" ! videoconvert ! compositor.sink_2 "
-        # pipe += f"multifilesrc location=\"outputs/03/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_3 "
-        # pipe += f"multifilesrc location=\"outputs/10/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_4 "
-        # pipe += f"multifilesrc location=\"outputs/11/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_5 "
-        # pipe += f"multifilesrc location=\"outputs/12/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_6 "
-        # pipe += f"multifilesrc location=\"outputs/13/frame%d.png\" index=1 caps=\"image/png,framerate=30/1\" ! decodebin ! videoscale ! capsfilter caps=\"video/x-raw, width=660, height=530\" ! compositor.sink_7 "
+
+        if a:
+            pipe += f"v4l2src device=\"/dev/video0\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_0 "
+        if b:
+            pipe += f"v4l2src device=\"/dev/video2\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_1 "
+        if c:
+            pipe += f"v4l2src device=\"/dev/video4\" ! capsfilter caps=\"image/jpeg, width=800, height=600\" ! jpegdec ! videoscale method=0 add-borders=false ! videoconvert ! compositor.sink_2 "
 
 
         pipe += "compositor name=compositor "
-        pipe += f" sink_0::xpos={0 * width} sink_0::ypos={0 * height}"
-        pipe += f" sink_1::xpos={1 * width} sink_1::ypos={0 * height}"
-        pipe += f" sink_2::xpos={2 * width} sink_2::ypos={0 * height}"
+        if a:
+            pipe += f" sink_0::xpos={0 * width} sink_0::ypos={0 * height}"
+        if b:
+            pipe += f" sink_1::xpos={1 * width} sink_1::ypos={0 * height}"
+        if c:
+            pipe += f" sink_2::xpos={2 * width} sink_2::ypos={0 * height}"
         # pipe += f" sink_3::xpos={3 * width} sink_3::ypos={0 * height}"
         # pipe += f" sink_4::xpos={0 * width} sink_4::ypos={1 * height}"
         # pipe += f" sink_5::xpos={1 * width} sink_5::ypos={1 * height}"
@@ -752,20 +717,6 @@ class Camera:
         pipe += "x264enc tune=zerolatency key-int-max=30 ! "
         pipe += "h264parse config-interval=-1 ! "
         pipe += "rtph264pay config-interval=-1 pt=96 ! "
-
-
-        #pipe += "nvvideoconvert ! "
-        #pipe += "nvv4l2av1enc"
-        #pipe += " enable-headers=false"
-        #pipe += " preset-level=UltraFastPreset"
-        ##pipe += " preset-level=MediumPreset"
-        #pipe += " bitrate=4000000"
-        ##pipe += " maxperf-enable=true"
-        #pipe += " disable-cdf=false"
-        ##pipe += " idrinterval=30"
-        #pipe += " iframeinterval=30"
-        ##pipe += " min-force-key-unit-interval=30000000"
-        #pipe += " ! "
 
 
         #### Run with AV1
@@ -788,7 +739,6 @@ class Camera:
 
 
 def main():
-    # logger = load_package_logger(level=LOGGER.BIN)
     logger = load_package_logger(level=logging.DEBUG)
 
     main_loop = GLib.MainLoop()
